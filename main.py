@@ -7,8 +7,10 @@ from concurrent import futures
 from tkinter import ttk
 from tkinter import EXTENDED
 from tkinter import END
-Thread1 = futures.ThreadPoolExecutor(max_workers=3)
+import threading
+
 columns1 = ("TITTLE","ID")
+totalCount = 0
 headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.96 Safari/537.36'}
 def open_link():
     Listbox1.delete(0,END)
@@ -24,17 +26,24 @@ def open_link():
     total_pages = all['data']['totalCount']
     list1 = range(1,total_pages)
     for n in list1:
+        print(n)
         Thread2.submit(analysis2,albumId,n)
+    Thread2.shutdown(wait=True)
     Text1.insert(END, '> 解析专辑成功，选择一项后，按住shift+鼠标左键单击即可批量选择。\n')
     Text1.see(END)
 def download(name,download_url,list_index):
     file_name = name + '.mp3'
-    #print(file_name)
-    file1 = requests.get(download_url,headers = headers)
-    with open(file_name,'wb') as code:
-        code.write(file1.content)
+    try:
+        file1 = requests.get(download_url,headers = headers)
+        with open(file_name,'wb') as code:
+            code.write(file1.content)
+    except:
+        print("Error: " + file_name + "下载失败~~~~~~~~~")
+        Text1.insert(END, '> ' + file_name + '下载失败~~~~~~~~~\n')
+    else:
+        print(file_name + '下载成功')
+        Text1.insert(END, '> ' + file_name + '下载成功\n')
     #tkinter.messagebox.showinfo('提示',name + '下载完成!')
-    Text1.insert(END, '> ' + file_name + '下载成功\n')
     Text1.see(END)
 def pass_download():
     xuanzhong_index = Listbox1.curselection()
@@ -42,40 +51,57 @@ def pass_download():
     Text1.see(END)
     #print(xuanzhong_index)
     #print(len(playUrl64_list))
+    Thread3 = futures.ThreadPoolExecutor(max_workers=5)
     for n in range(0,len(xuanzhong_index)):
-        Thread3 = futures.ThreadPoolExecutor(max_workers=1)
         name = Listbox1.get(xuanzhong_index[n])
         url = Listbox2.get(xuanzhong_index[n])
         #print(name,url)
         Thread3.submit(download,name,url,xuanzhong_index[n])
+    #Thread3.shutdown(wait=True)
+    #print("下载完毕")
+    #Text1.insert(END, '> 下载完毕\n')
+    Text1.see(END)
 def analysis2(id,pages):
+    global totalCount
     url = 'http://180.153.255.6/mobile/v1/album/track/ts-1534855383505?albumId=' + id + '&device=android&isAsc=true&isQueryInvitationBrand=true&pageId=' + str(pages) + '&pageSize=20&pre_page=0'
     html = requests.get(url)
     all = json.loads(html.text)
     data = all['data']['list']
+    print("第" + str(pages) + "页")
+    index = totalCount - (pages - 1) * 20
     for a in data:
         #print(a)
         title = a['title']
         playUrl64 = a['playUrl64']
-        Listbox1.insert(END,title)
+        Listbox1.insert(END,("000" + str(index))[-4:] + title)
         Listbox2.insert(END,playUrl64)
-    Thread2.shutdown(wait=True) 
+        index = index -1
+    #Thread2.shutdown(wait=True) 
 def analysis1(event):#此搜索只是为了搜索总页数，需要进一步提交
+    global totalCount
     Listbox1.delete(0,END)
     Listbox2.delete(0,END)
-    Thread2 = futures.ThreadPoolExecutor(max_workers=1)
+    #Thread4 = futures.ThreadPoolExecutor(max_workers=1)
     for item in treeview1.selection():
         item_text = treeview1.item(item,'values')
         albumId = item_text[1]
     url = 'http://180.153.255.6/mobile/v1/album/track/ts-1534855383505?albumId=' + albumId + '&device=android&isAsc=true&isQueryInvitationBrand=true&pageId=1&pageSize=20&pre_page=0'
     html = requests.get(url)
     all = json.loads(html.text)
-    total_pages = all['data']['totalCount']
-    list1 = range(1,total_pages)
+    totalCount = all['data']['totalCount']
+    total_pages = totalCount // 20
+    if totalCount % 20 >0:
+        total_pages = total_pages + 1
+
+    print(total_pages)
+    list1 = range(1,(total_pages+1))
     for n in list1:
-        Thread2.submit(analysis2,albumId,n)
+        analysis2(albumId,n)
+        #Thread4.submit(analysis2,albumId,n)
+    #Thread4.shutdown(wait=True)
     Text1.insert(END, '> 解析专辑成功，选择一项后，按住shift+鼠标左键单击即可批量选择。\n')
     Text1.see(END)
+    print("提取完毕！")
 def search2(name,pages):
     url = 'https://www.ximalaya.com/revision/search?core=album&kw=' + name + '&page='+ str(pages) + '&spellchecker=true&rows=20&condition=relation&device=iPhone'
     #print(url)
@@ -102,9 +128,13 @@ def search1(): #此搜索只是为了搜索总数和总页数，需要进一步�
     #data = all['data']['result']['response']['docs']
     total_pages = all['data']['result']['response']['totalPage']
     #print(data)
-    list1 = range(1,total_pages + 1)
-    for n in list1:
-        Thread1.submit(search2,name,n)  
+    search2(name,1)
+    print(total_pages)
+    #list1 = range(1,total_pages + 1)
+    #Thread1 = futures.ThreadPoolExecutor(max_workers=3)
+    #for n in list1:
+    #    Thread1.submit(search2,name,n)  
+    #Thread1.shutdown(wait=True)
     Text1.insert(END, '> 搜索正在进行，双击列表解析对应专辑\n')
     Text1.see(END)
 #GUI
